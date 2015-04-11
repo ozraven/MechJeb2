@@ -217,7 +217,7 @@ namespace MuMech
                         Vector3d rot = Vector3d.up;
                         if (trans_kill_h)
                         {
-                            Vector3 hsdir = Vector3.Exclude(vesselState.up, vesselState.surfaceVelocity);
+                            Vector3 hsdir = Vector3.ProjectOnPlane(vesselState.surfaceVelocity, vesselState.up);
                             Vector3 dir = -hsdir + vesselState.up * Math.Max(Math.Abs(spd), 20 * mainBody.GeeASL);
                             if ((Math.Min(vesselState.altitudeASL, vesselState.altitudeTrue) > 5000) && (hsdir.magnitude > Math.Max(Math.Abs(spd), 100 * mainBody.GeeASL) * 2))
                             {
@@ -301,7 +301,7 @@ namespace MuMech
 
             if (limitToPreventOverheats)
             {
-                float limit = TemperatureSafetyThrottle();
+                float limit = (float)TemperatureSafetyThrottle();
                 if(limit < throttleLimit) limiter = LimitMode.Temperature;
                 throttleLimit = Mathf.Min(throttleLimit, limit);
             }
@@ -377,12 +377,12 @@ namespace MuMech
         }
 
         //a throttle setting that throttles down if something is close to overheating
-        float TemperatureSafetyThrottle()
+        double TemperatureSafetyThrottle()
         {
-            float maxTempRatio = vessel.parts.Max(p => p.temperature / p.maxTemp);
+            double maxTempRatio = vessel.parts.Max(p => p.temperature / p.maxTemp);
 
             //reduce throttle as the max temp. ratio approaches 1 within the safety margin
-            const float tempSafetyMargin = 0.05f;
+            const double tempSafetyMargin = 0.05f;
             if (maxTempRatio < 1 - tempSafetyMargin) return 1.0F;
             else return (1 - maxTempRatio) / tempSafetyMargin;
         }

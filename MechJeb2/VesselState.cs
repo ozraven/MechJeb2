@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using UnityEngine;
 
@@ -9,6 +10,9 @@ namespace MuMech
     public class VesselState
     {
         private Vessel vesselRef = null;
+
+        //private FlightIntegrator flightIntegrator;
+
 
         [ValueInfoItem("Universal Time", InfoItem.Category.Recorder, format = ValueInfoItem.TIME)]
         public double time;            //planetarium time
@@ -129,7 +133,31 @@ namespace MuMech
         public Vector3d torqueFromEngine;
         // Variable part of torque related to differential throttle
         public Vector3d torqueFromDiffThrottle;
-        public double massDrag;
+        
+        //public double massDrag;
+
+
+        public Vector3d pureDragV;
+        [ValueInfoItem("Pure Drag", InfoItem.Category.Vessel, format = ValueInfoItem.SI, units = "m/s²")]
+        public double pureDrag;
+
+        public Vector3d pureLiftV;
+        [ValueInfoItem("Pure Lift", InfoItem.Category.Vessel, format = ValueInfoItem.SI, units = "m/s²")]
+        public double pureLift;
+
+        // Drag is the force (pureDrag + PureLift) applied opposite of the surface vel
+        public double drag;
+        // Drag is the force (pureDrag + PureLift) applied in the "Up" direction
+        public double dragUp;
+        // Lift is the force (pureDrag + PureLift) applied in the "Lift" direction
+        public double lift;
+        // Lift is the force (pureDrag + PureLift) applied in the "Up" direction
+        public double liftUp;
+
+
+        [ValueInfoItem("Drag Coef", InfoItem.Category.Vessel, format = "F2")]
+        public double dragCoef;
+        
         public double atmosphericDensity;
         [ValueInfoItem("Atmosphere density", InfoItem.Category.Misc, format = ValueInfoItem.SI, units = "g/m³")]
         public double atmosphericDensityGrams;
@@ -210,6 +238,11 @@ namespace MuMech
         {
             if (vessel.rigidbody == null) return; //if we try to update before rigidbodies exist we spam the console with NullPointerExceptions.
 
+            //if (flightIntegrator == null)
+            //    flightIntegrator = vessel.GetComponent<FlightIntegrator>();
+            //
+            //flightIntegrator.
+
 
             UpdateVelocityAndCoM(vessel);
 
@@ -241,7 +274,6 @@ namespace MuMech
             orbitalVelocity = Vector3d.zero;
 
             mass = 0;
-            massDrag = 0;
 
             torqueAvailable = Vector3d.zero;
             torqueFromEngine = Vector3d.zero;
@@ -253,7 +285,6 @@ namespace MuMech
                 if (p.rb != null)
                 {
                     mass += p.rb.mass;
-                    massDrag += p.rb.mass * p.maximum_drag;
 
                     CoM = CoM + (p.rb.worldCenterOfMass * p.rb.mass);
 
@@ -339,8 +370,9 @@ namespace MuMech
             altitudeBottomIsCurrent = false;
 
             double atmosphericPressure = FlightGlobals.getStaticPressure(altitudeASL, vessel.mainBody);
-            if (atmosphericPressure < vessel.mainBody.atmosphereMultiplier * 1e-6) atmosphericPressure = 0;
-            atmosphericDensity = FlightGlobals.getAtmDensity(atmosphericPressure);
+            //if (atmosphericPressure < vessel.mainBody.atmosphereMultiplier * 1e-6) atmosphericPressure = 0;
+            double temperature = FlightGlobals.getExternalTemperature(altitudeASL);
+            atmosphericDensity = FlightGlobals.getAtmDensity(atmosphericPressure, temperature);
             atmosphericDensityGrams = atmosphericDensity * 1000;
             dynamicPressure = 0.5 * vessel.atmDensity * surfaceVelocity.sqrMagnitude;
 
@@ -453,30 +485,25 @@ namespace MuMech
             torqueFromEngine = Vector3d.zero;
             ctrlTorqueAvailable = new Vector6();
 
+            pureDragV = Vector3d.zero;
+            pureLiftV = Vector3d.zero;
+
+            dragCoef = 0;
+
+
             for (int i = 0; i < vessel.parts.Count; i++)
             {
                 Part p = vessel.parts[i];
-                if (p is ControlSurface) // legacy. Remove this if and when it's no longer important to support mods that use ControlSurface
-                {
-                    Vector3d partPosition = p.Rigidbody.worldCenterOfMass - CoM;
-                    ControlSurface cs = (p as ControlSurface);
-                    Vector3d airSpeed = surfaceVelocity +
-                                        Vector3.Cross(cs.Rigidbody.angularVelocity, cs.transform.position - cs.Rigidbody.position);
-                    // Air Speed is velocityVesselSurface
-                    // AddForceAtPosition seems to need the airspeed vector rotated with the flap rotation x its surface
-                    Quaternion airSpeedRot = Quaternion.AngleAxis(
-                        cs.ctrlSurfaceRange * cs.ctrlSurfaceArea,
-                        cs.transform.rotation * cs.pivotAxis);
-                    Vector3 ctrlTorquePos =
-                        vessel.GetTransform()
-                            .InverseTransformDirection(Vector3.Cross(partPosition, cs.getLiftVector(airSpeedRot * airSpeed)));
-                    Vector3 ctrlTorqueNeg =
-                        vessel.GetTransform()
-                            .InverseTransformDirection(
-                                Vector3.Cross(partPosition, cs.getLiftVector(Quaternion.Inverse(airSpeedRot) * airSpeed)));
-                    ctrlTorqueAvailable.Add(ctrlTorquePos);
-                    ctrlTorqueAvailable.Add(ctrlTorqueNeg);
-                }
+
+                pureDragV += -p.dragVectorDir * p.dragScalar;
+
+
+                //#warning while this works for real time it does not help for simulations. Need to get a coef even while in vacum
+                //if (p.dynamicPressurekPa > 0 && PhysicsGlobals.DragMultiplier > 0)
+                //    dragCoef += p.dragScalar / (p.dynamicPressurekPa * PhysicsGlobals.DragMultiplier);
+
+                #warning may need to check the drag model ?
+                dragCoef += p.DragCubes.AreaDrag * PhysicsGlobals.DragCubeMultiplier;
 
                 for (int index = 0; index < vesselStatePartExtensions.Count; index++)
                 {
@@ -495,12 +522,7 @@ namespace MuMech
                     if (pm is ModuleReactionWheel)
                     {
                         ModuleReactionWheel rw = (ModuleReactionWheel)pm;
-                        // I had to remove the test for active in .23 since the new ressource system reply to the RW that 
-                        // there is no energy available when the RW do tiny adjustment.
-                        // I replaceed it with a test that check if there is electricity anywhere on the ship. 
-                        // Let's hope we don't get reaction wheel that use something else
-                        //if (rw.wheelState == ModuleReactionWheel.WheelState.Active && !rw.stateString.Contains("Not enough"))
-                        if (rw.wheelState == ModuleReactionWheel.WheelState.Active && vessel.HasElectricCharge())
+                        if (rw.wheelState == ModuleReactionWheel.WheelState.Active && !rw.stateString.Contains("Not enough"))
                         {
                             torqueAvailable += new Vector3d(rw.PitchTorque, rw.RollTorque, rw.YawTorque);
                         }
@@ -509,10 +531,6 @@ namespace MuMech
                     {
                         einfo.AddNewEngine(pm as ModuleEngines, p.transform.position - CoM);
                     }
-                    else if (pm is ModuleEnginesFX)
-                    {
-                        einfo.AddNewEngine(pm as ModuleEnginesFX, p.transform.position - CoM);
-                    }
                     else if (pm is ModuleResourceIntake)
                     {
                         iinfo.addIntake(pm as ModuleResourceIntake);
@@ -520,6 +538,7 @@ namespace MuMech
                     else if (pm is ModuleParachute)
                     {
                         ModuleParachute parachute = pm as ModuleParachute;
+
                         parachutes.Add(parachute);
                         if (parachute.deploymentState == ModuleParachute.deploymentStates.DEPLOYED ||
                             parachute.deploymentState == ModuleParachute.deploymentStates.SEMIDEPLOYED)
@@ -531,26 +550,63 @@ namespace MuMech
                     {
                         // TODO : Tweakable for ignorePitch / ignoreYaw  / ignoreRoll 
                         ModuleControlSurface cs = (pm as ModuleControlSurface);
+
+                        if (p.ShieldedFromAirstream)
+                            continue;
+
+                        pureLiftV += cs.liftForce;
+                        pureDragV += cs.dragForce;
+
                         Vector3d partPosition = p.Rigidbody.worldCenterOfMass - CoM;
 
-                        Vector3d airSpeed = surfaceVelocity +
-                                            Vector3.Cross(
-                                                cs.part.Rigidbody.angularVelocity,
-                                                cs.transform.position - cs.part.Rigidbody.position);
+                        Vector3 velocity = p.Rigidbody.GetPointVelocity(cs.transform.position) + Krakensbane.GetFrameVelocityV3f();
 
-                        Quaternion airSpeedRot = Quaternion.AngleAxis(
-                            cs.ctrlSurfaceRange * cs.ctrlSurfaceArea,
-                            cs.transform.rotation * Vector3.right);
+                        //pointVelocity = forward * 50;
 
-                        Vector3 ctrlTroquePos =
-                            vessel.GetTransform()
-                                .InverseTransformDirection(Vector3.Cross(partPosition, cs.getLiftVector(airSpeedRot * airSpeed)));
-                        Vector3 ctrlTroqueNeg =
-                            vessel.GetTransform()
-                                .InverseTransformDirection(
-                                    Vector3.Cross(partPosition, cs.getLiftVector(Quaternion.Inverse(airSpeedRot) * airSpeed)));
-                        ctrlTorqueAvailable.Add(ctrlTroquePos);
-                        ctrlTorqueAvailable.Add(ctrlTroqueNeg);
+                        //MechJebCore.print("VEL " + MuUtils.PrettyPrint(pointVelocity) + " " + pointVelocity.magnitude.ToString("F2"));
+
+                        Vector3 nVel;
+                        Vector3 liftVector;
+                        float liftDot;
+                        float absDot;
+                        cs.SetupCoefficients(velocity, p.atmDensity, out nVel, out liftVector, out liftDot, out absDot);
+
+                        Quaternion maxRotation = Quaternion.AngleAxis(cs.ctrlSurfaceRange, cs.transform.rotation * Vector3.right);
+
+                        double dynPressurePa = p.dynamicPressurekPa * 1000;
+                        //dynPressurePa = 0.5 * p.atmDensity * pointVelocity.sqrMagnitude;
+
+                        float mach = (float)p.machNumber;
+                        //mach = pointVelocity.magnitude / (float)vessel.speedOfSound;
+
+                        //MechJebCore.print(MuUtils.PrettyPrint(pointVelocity) + " " + p.atmDensity.ToString("F3") + " " + MuUtils.PrettyPrint(nVel) + " " + MuUtils.PrettyPrint(liftVector) + " " + liftDot.ToString("F3") + " " + absDot.ToString("F3") + " " + pointVelocity.ToString("F3"));
+
+                        //MechJebCore.print("MRO " + MuUtils.PrettyPrint(maxRotation.eulerAngles) + " mach " + mach.ToString("F5"));
+
+                        Vector3 posDeflection = maxRotation * liftVector;
+                        float liftDotPos = Vector3.Dot(nVel, posDeflection);
+                        absDot = Mathf.Abs(liftDotPos);
+
+                        Vector3 liftForcePos = cs.GetLiftVector(posDeflection, liftDotPos, absDot, dynPressurePa, mach) * cs.ctrlSurfaceArea;
+                        Vector3 ctrlTorquePos = vessel.GetTransform().InverseTransformDirection(Vector3.Cross(partPosition, liftForcePos));
+
+                        Vector3 negsDeflection = Quaternion.Inverse(maxRotation) * liftVector;
+                        float liftDotNeg = Vector3.Dot(nVel, negsDeflection);
+                        absDot = Mathf.Abs(liftDotPos);
+                        Vector3 liftForceNeg = cs.GetLiftVector(negsDeflection, liftDotNeg, absDot, dynPressurePa, mach) * cs.ctrlSurfaceArea;
+                        Vector3 ctrlTorqueNeg = vessel.GetTransform().InverseTransformDirection(Vector3.Cross(partPosition, liftForceNeg));
+
+                        //MechJebCore.print("LFT " + MuUtils.PrettyPrint(liftForcePos) + " " + liftForcePos.magnitude.ToString("F5") + " " + MuUtils.PrettyPrint(liftForceNeg) + " " + liftForceNeg.magnitude.ToString("F5"));
+                        //MechJebCore.print("DOT " + liftDotPos.ToString("F5") + " " + liftDotNeg.ToString("F5"));
+
+                        ctrlTorqueAvailable.Add(ctrlTorquePos);
+                        ctrlTorqueAvailable.Add(ctrlTorqueNeg);
+                    }
+                    else if (pm is ModuleLiftingSurface)
+                    {
+                        ModuleLiftingSurface liftingSurface = (ModuleLiftingSurface)pm;
+                        pureLiftV += liftingSurface.liftForce;
+                        pureDragV += liftingSurface.dragForce;
                     }
 
                     for (int index = 0; index < vesselStatePartModuleExtensions.Count; index++)
@@ -562,7 +618,7 @@ namespace MuMech
             }
 
             torqueAvailable += Vector3d.Max(rcsTorqueAvailable.positive, rcsTorqueAvailable.negative); // Should we use Max or Min ?
-            torqueAvailable += Vector3d.Max(ctrlTorqueAvailable.positive, ctrlTorqueAvailable.negative); // Should we use Max or Min ?            
+            torqueAvailable += Vector3d.Max(ctrlTorqueAvailable.positive, ctrlTorqueAvailable.negative); // Should we use Max or Min ?
             torqueAvailable += Vector3d.Max(einfo.torqueEngineAvailable.positive, einfo.torqueEngineAvailable.negative);
 
             torqueFromDiffThrottle = Vector3d.Max(einfo.torqueDiffThrottle.positive, einfo.torqueDiffThrottle.negative);
@@ -573,6 +629,24 @@ namespace MuMech
             thrustVectorMaxThrottle = einfo.thrustMax;
             thrustVectorMinThrottle = einfo.thrustMin;
             thrustVectorLastFrame = einfo.thrustCurrent;
+
+
+            pureDrag = pureDragV.magnitude;
+
+            pureLift = pureLiftV.magnitude;
+
+
+            Vector3d force = pureDragV + pureLiftV;
+            Vector3d liftDir = -Vector3d.Cross(vessel.transform.right, -surfaceVelocity.normalized);
+
+            // Drag is the part (pureDrag + PureLift) applied opposite of the surface vel
+            drag = Vector3d.Dot(force, -surfaceVelocity.normalized);
+            // Drag is the part (pureDrag + PureLift) applied in the "Up" direction
+            dragUp = Vector3d.Dot(pureDragV, up);
+            // Lift is the part (pureDrag + PureLift) applied in the "Lift" direction
+            lift = Vector3d.Dot(force, liftDir);
+            // Lift is the part (pureDrag + PureLift) applied in the "Up" direction
+            liftUp = Vector3d.Dot(force, up);
             
             maxEngineResponseTime = einfo.maxResponseTime;
         }
@@ -687,8 +761,8 @@ namespace MuMech
         {
             if (mainBody == null || altitudeASL > mainBody.RealMaxAtmosphereAltitude()) return double.PositiveInfinity;
 
-            double airDensity = FlightGlobals.getAtmDensity(FlightGlobals.getStaticPressure(CoM, mainBody));
-            return Math.Sqrt(2 * localg * mass / (massDrag * FlightGlobals.DragMultiplier * airDensity));
+            #warning Have someone check that
+            return Math.Sqrt(2 * localg * mass / drag);
         }
 
         public double ThrustAccel(double throttle)
@@ -796,14 +870,14 @@ namespace MuMech
 
             Vector3d position = gimbal.gimbalTransforms[i].position - CoM;
             double distance = position.magnitude;
-            double radius = Vector3.Exclude(Vector3.Project(position, p.vessel.ReferenceTransform.up), position).magnitude;
+            double radius = Vector3.ProjectOnPlane(position, Vector3.Project(position, p.vessel.ReferenceTransform.up)).magnitude;
 
             torque.x = Math.Sin(Math.Abs(gimbal.gimbalRange) * Math.PI / 180d) * distance;
             torque.z = Math.Sin(Math.Abs(gimbal.gimbalRange) * Math.PI / 180d) * distance;
 
             // The "(e.part.vessel.rb_velocity * Time.fixedDeltaTime)" makes no sense to me but that's how the game does it...
             Vector3d position2 = position + (p.vessel.rb_velocity * Time.fixedDeltaTime);
-            Vector3d radialAxis = Vector3.Exclude(Vector3.Project(position2, p.vessel.ReferenceTransform.up), position2);
+            Vector3d radialAxis = Vector3.ProjectOnPlane(position2, Vector3.Project(position2, p.vessel.ReferenceTransform.up));
             if (radialAxis.sqrMagnitude > 0.01f)
             {
                 torque.y = Math.Sin(Math.Abs(gimbal.gimbalRange) * Math.PI / 180d) * radius;
@@ -862,90 +936,6 @@ namespace MuMech
             }
 
             public void AddNewEngine(ModuleEngines e, Vector3d partPosition)
-            {
-                if ((!e.EngineIgnited) || (!e.isEnabled))
-                {
-                    return;
-                }
-
-                // Compute the resource requirement at full thrust.
-                //   mdot = maxthrust / (Isp * g0) in tonnes per second
-                //   udot = mdot / mixdensity in units per second of propellant per ratio unit
-                //   udot * ratio_i : units per second of propellant i
-                // Choose the worse Isp between now and after one timestep.
-                // TODO: actually, pressure should be for the engine part, not for the spacecraft.
-                // The pressure can easily vary by 1% from top to bottom of a spacecraft.
-                // We'd need to compute the position of the part, which seems like a pain.
-                float Isp0 = e.atmosphereCurve.Evaluate(atmP0);
-                float Isp1 = e.atmosphereCurve.Evaluate(atmP1);
-                double Isp = Math.Min(Isp0, Isp1);
-                double udot = e.maxThrust / (Isp * e.g * e.mixtureDensity); // Tavert Issue #163
-                for (int i = 0; i < e.propellants.Count; i++)
-                {
-                    var propellant = e.propellants[i];
-                    double maxreq = udot * propellant.ratio;
-                    addResource(propellant.id, propellant.currentRequirement, maxreq);
-                }
-
-                if (!e.getFlameoutState)
-                {
-                    Part p = e.part;
-
-                    double usableFraction = 1;
-                    if (e.useVelocityCurve)
-                    {
-                        usableFraction *= e.velocityCurve.Evaluate((float)(e.part.vessel.orbit.GetVel() - e.part.vessel.mainBody.getRFrmVel(CoM)).magnitude);
-                    }
-
-                    float maxThrust = e.maxThrust / (float)e.thrustTransforms.Count;
-                    float minThrust = e.minThrust / (float)e.thrustTransforms.Count;
-
-                    float thrustLimiter = e.thrustPercentage / 100f;
-                    double eMaxThrust = minThrust + (maxThrust - minThrust) * thrustLimiter;
-                    double eMinThrust = e.throttleLocked ? eMaxThrust : minThrust;
-                    // currentThrottle include the thrustLimiter
-                    double eCurrentThrust = usableFraction * (eMaxThrust * e.currentThrottle / thrustLimiter + eMinThrust * (1 - e.currentThrottle / thrustLimiter));
-
-                    for (int i = 0; i < e.thrustTransforms.Count; i++)
-                    {
-                        PartModule gimbal;
-                        GimbalExt gimbalExt = VesselState.getGimbalExt(p, out gimbal);
-
-                        // The rotation makes a +z vector point in the direction that molecules are ejected
-                        // from the engine.  The resulting thrust force is in the opposite direction.
-                        // This gives us the thrust direction at rest state fro gimbaled engines
-                        Vector3d thrustDirectionVector = gimbalExt.initialRot(gimbal, e.thrustTransforms[i], i) * Vector3d.back;
-                        // This one would give us the current thrust direction including current gimbal
-                        // Not sure which one is the best one to use.
-                        //thrustDirectionVector = e.thrustTransforms[i].rotation * Vector3d.back;
-
-                        double cosineLosses = Vector3d.Dot(thrustDirectionVector, e.part.vessel.GetTransform().up);
-
-                        thrustCurrent += eCurrentThrust * cosineLosses * thrustDirectionVector;
-                        thrustMax += eMaxThrust * cosineLosses * thrustDirectionVector;
-                        thrustMin += eMinThrust * cosineLosses * thrustDirectionVector;
-
-                        Vector3d torque = gimbalExt.torqueVector(gimbal, i, CoM);
-
-                        torqueEngineAvailable.Add(torque * eMinThrust);
-                        torqueEngineVariable.Add(torque * (eMaxThrust - eMinThrust));
-                        if (!e.throttleLocked)
-                        {
-                            torqueDiffThrottle.Add(e.vessel.transform.rotation.Inverse() * Vector3d.Cross(partPosition, thrustDirectionVector) * (maxThrust - minThrust));
-                        }
-                    }
-
-                    if (e.useEngineResponseTime)
-                    {
-                        double responseTime = 1.0 / Math.Min(e.engineAccelerationSpeed, e.engineDecelerationSpeed);
-                        if (responseTime > maxResponseTime) maxResponseTime = responseTime;
-                    }
-                }
-            }
-
-            // Support for the new ModuleEnginesFX - lack of common interface between the 2 engins type is not fun
-            // I can't even just copy  ModuleEngines to a ModuleEnginesFX and use the same function since some field are readonly
-            public void AddNewEngine(ModuleEnginesFX e, Vector3d partPosition)
             {
                 if ((!e.EngineIgnited) || (!e.isEnabled))
                 {
@@ -1174,10 +1164,9 @@ namespace MuMech
                 double v1mag = v1.magnitude;
 
                 // As with thrust, here too we should get the static pressure at the intake, not at the center of mass.
-                double atmDensity0 = FlightGlobals.getAtmDensity(FlightGlobals.getStaticPressure());
-                float alt1 = (float)(FlightGlobals.ship_altitude
-                        + dT * FlightGlobals.ship_verticalSpeed);
-                double atmDensity1 = FlightGlobals.getAtmDensity(FlightGlobals.getStaticPressure(alt1));
+                double atmDensity0 = FlightGlobals.getAtmDensity(FlightGlobals.getStaticPressure(), FlightGlobals.getExternalTemperature());
+                float alt1 = (float)(FlightGlobals.ship_altitude + dT * FlightGlobals.ship_verticalSpeed);
+                double atmDensity1 = FlightGlobals.getAtmDensity(FlightGlobals.getStaticPressure(alt1), FlightGlobals.getExternalTemperature(alt1));
 
                 intakes = new IntakeData[modules.Count];
                 int idx = 0;

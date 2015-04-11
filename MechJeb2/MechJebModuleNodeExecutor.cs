@@ -188,8 +188,8 @@ namespace MuMech
             double lastStageBurnTime = 0;
             for (int i = stats.vacStats.Length - 1; i >= 0 && dvLeft > 0; i--)
             {
-                var s = stats.vacStats[i];
-                if (s.deltaV <= 0 || s.thrust <= 0)
+                var stage = stats.vacStats[i];
+                if (stage.deltaV <= 0 || stage.thrust <= 0)
                 {
                     if (core.staging.enabled)
                     {
@@ -203,7 +203,7 @@ namespace MuMech
                     continue;
                 }
 
-                double stageBurnDv = Math.Min(s.deltaV, dvLeft);
+                double stageBurnDv = Math.Min(stage.deltaV, dvLeft);
                 dvLeft -= stageBurnDv;
 
                 if (halfDvLeft > stageBurnDv)
@@ -211,7 +211,7 @@ namespace MuMech
                     halfDvLeft -= stageBurnDv;
                 }
 
-                double stageBurnFraction = stageBurnDv / s.deltaV;
+                double stageBurnFraction = stageBurnDv / stage.deltaV;
 
                 // Delta-V is proportional to ln(m0 / m1) (where m0 is initial
                 // mass and m1 is final mass). We need to know the final mass
@@ -219,8 +219,8 @@ namespace MuMech
                 //      ln(m0 / m1) * stageBurnFraction = ln(m0 / m1b)
                 //      exp(ln(m0 / m1) * stageBurnFraction) = m0 / m1b
                 //      m1b = m0 / (exp(ln(m0 / m1) * stageBurnFraction))
-                double stageBurnFinalMass = s.totalMass / Math.Exp(Math.Log(s.totalMass / (s.totalMass - s.resourceMass)) * stageBurnFraction);
-                double stageAvgAccel = s.thrust / ((s.totalMass + stageBurnFinalMass) / 2);
+                double stageBurnFinalMass = stage.totalMass / Math.Exp(Math.Log(stage.totalMass / (stage.totalMass - stage.resourceMass)) * stageBurnFraction);
+                double stageAvgAccel = stage.thrust / ((stage.totalMass + stageBurnFinalMass) / 2);
 
                 // Right now, for simplicity, we're ignoring throttle limits for
                 // all but the current stage. This is wrong, but hopefully it's

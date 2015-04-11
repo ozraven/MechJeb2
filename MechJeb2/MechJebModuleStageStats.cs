@@ -92,7 +92,7 @@ namespace MuMech
             simBody = HighLogic.LoadedSceneIsEditor ? editorBody ?? Planetarium.fetch.Home : vessel.mainBody;
             SimManager.Gravity = 9.81 * simBody.GeeASL;
 
-            SimManager.Atmosphere = simBody.atmosphere ? 101.325 * simBody.atmosphereMultiplier : 0;
+            SimManager.Atmosphere = simBody.atmosphere ? Planetarium.fetch.Home.GetPressure(0) / Planetarium.fetch.Home.GetPressure(0.0) : 0;
             SimManager.Velocity = HighLogic.LoadedSceneIsEditor ? 0 : vessel.srfSpeed;
             SimManager.vectoredThrust = dVLinearThrust;
 

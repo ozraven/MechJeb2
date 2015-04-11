@@ -28,14 +28,21 @@ namespace MuMech
         //where the max_drag average over parts is weighted by the part mass
         public static Vector3d DragAccel(this CelestialBody body, Vector3d pos, Vector3d orbitVel, double dragCoeffOverMass)
         {
-            double airPressure = FlightGlobals.getStaticPressure(pos, body);
+            //double airPressure = FlightGlobals.getStaticPressure(pos, body);
 
             //Atmosphere cuts out abruptly when pressure falls below 1e-6 * sea level pressure.
-            if (airPressure < body.atmosphereMultiplier * 1e-6) return Vector3d.zero;
+            //if (airPressure < body.atmosphereMultiplier * 1e-6) return Vector3d.zero;
+            //
+            //double airDensity = FlightGlobals.getAtmDensity(airPressure);
+            //Vector3d airVel = orbitVel - body.getRFrmVel(pos);
+            
 
-            double airDensity = FlightGlobals.getAtmDensity(airPressure);
-            Vector3d airVel = orbitVel - body.getRFrmVel(pos);
-            return -0.5 * FlightGlobals.DragMultiplier * airDensity * dragCoeffOverMass * airVel.magnitude * airVel;
+            #warning FIX THAT BEFORE 1.0 !!
+
+
+            //return -0.5 * FlightGlobals.DragMultiplier * airDensity * dragCoeffOverMass * airVel.magnitude * airVel;
+
+            return Vector3d.zero;
         }
 
         //The KSP drag law is dv/dt = -b * v^2 where b is proportional to the air density and
@@ -44,13 +51,21 @@ namespace MuMech
         //fraction of its initial velocity
         public static double DragLength(this CelestialBody body, Vector3d pos, double dragCoeffOverMass)
         {
-            double airDensity = FlightGlobals.getAtmDensity(FlightGlobals.getStaticPressure(pos, body));
-            if (airDensity <= 0) return Double.MaxValue;
-            return 1.0 / (0.5 * FlightGlobals.DragMultiplier * airDensity * dragCoeffOverMass);
+            //double airDensity = FlightGlobals.getAtmDensity(FlightGlobals.getStaticPressure(pos, body));
+            //if (airDensity <= 0) return Double.MaxValue;
+
+
+            #warning FIX THAT BEFORE 1.0 !!
+
+            //return 1.0 / (0.5 * FlightGlobals.DragMultiplier * airDensity * dragCoeffOverMass);
+
+            return 0;
         }
 
         public static double DragLength(this CelestialBody body, double altitudeASL, double dragCoeffOverMass)
         {
+
+#warning It all wrong now
             return body.DragLength(body.GetWorldSurfacePosition(0, 0, altitudeASL), dragCoeffOverMass);
         }
 
@@ -58,16 +73,11 @@ namespace MuMech
         //the atmosphere. Use this function instead.
         public static double RealMaxAtmosphereAltitude(this CelestialBody body)
         {
+
+#warning check if atmosphereDepth = 0 when !body.atmosphere and remove the whole ext
+
             if (!body.atmosphere) return 0;
-            if (body.useLegacyAtmosphere)
-            {
-                //Atmosphere actually cuts out when exp(-altitude / scale height) = 1e-6
-                return -body.atmosphereScaleHeight * 1000 * Math.Log(1e-6);
-            }
-            else
-            {
-                return body.pressureCurve.keys.Last().time * 1000;
-            }
+            return body.atmosphereDepth;
         }
     }
 }

@@ -459,7 +459,8 @@ namespace MuMech
             {
                 // if the atmosphere is thick, deceleration (meaning freefall through the atmosphere)
                 // should end a safe height above the landing site in order to allow braking from terminal velocity
-                double landingSiteDragLength = mainBody.DragLength(LandingAltitude, (vesselState.massDrag + ParachuteAddedDragMass()) / vesselState.mass);
+#warning FIX THAT BEFORE 1.0 !!
+                double landingSiteDragLength = mainBody.DragLength(LandingAltitude, (vesselState.drag + ParachuteAddedDragMass()) / vesselState.mass);
 
                 return 2 * landingSiteDragLength + LandingAltitude;
             }
@@ -482,8 +483,11 @@ namespace MuMech
             //The air density goes like exp(-h/(scale height)), so the drag length goes like exp(+h/(scale height)).
             //Some math shows that if (scale height) > e * (surface drag length) then 
             //there is an altitude at which (altitude) > (drag length at that altitude).
-            double seaLevelDragLength = mainBody.DragLength(0, (vesselState.massDrag + ParachuteAddedDragMass()) / vesselState.mass);
-            return (1000 * mainBody.atmosphereScaleHeight > 2.71828 * seaLevelDragLength);
+            //double seaLevelDragLength = mainBody.DragLength(0, (vesselState.massDrag + ParachuteAddedDragMass()) / vesselState.mass);
+            #warning FIX THAT BEFORE 1.0 !!
+            //return (1000 * mainBody.atmosphereScaleHeight > 2.71828 * seaLevelDragLength);
+            //return (1000 * 1 > 2.71828 * 1);
+            return false;
         }
 
         // This is not the exact number, but it's good enough for our use
@@ -823,7 +827,9 @@ namespace MuMech
                 // TODO is there benefit in running an initial simulation to calculate the height at which the ratio between vertical and horizontal velocity would be the best for being able to deply the chutes to control the landing site?
 
                 // At what ASL height does the reference body have this pressure?
-                maxSemiDeployHeight = (this.body.atmosphereScaleHeight *1000) * -1 * Math.Log(minSemiDeployPressure / this.body.atmosphereMultiplier);
+                //maxSemiDeployHeight = (this.body.atmosphereScaleHeight *1000) * -1 * Math.Log(minSemiDeployPressure / this.body.atmosphereMultiplier);
+#warning FIX THAT BEFORE 1.0 !!
+                maxSemiDeployHeight = (1 *1000) * -1 * Math.Log(minSemiDeployPressure / 1);
 
                 // We have to have semi deployed by the time we fully deploy.
                 minSemiDeployHeight = maxFullDeployHeight;

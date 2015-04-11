@@ -290,6 +290,10 @@ namespace KerbalEngineer.VesselSimulator
             try
             {
                 //Profiler.BeginSample("SimManager.RunSimulation().vacSim");
+
+
+#warning the whole sim need works with the 1.0 change. Padishar said he ll have a look.
+
                 VacStages = sims[0].RunSimulation();
                 //Profiler.EndSample();
                 if (VacStages != null && VacStages.Length > 0)

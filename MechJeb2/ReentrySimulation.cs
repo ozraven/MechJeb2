@@ -25,8 +25,8 @@ namespace MuMech
         //parameters of the problem:
         Orbit initialOrbit;
         bool bodyHasAtmosphere;
-        double seaLevelAtmospheres;
-        double scaleHeight;
+        //double seaLevelAtmospheres;
+        //double scaleHeight;
         double bodyRadius;
         double gravParameter;
         double dragMassExcludingUsedParachutes;         
@@ -90,8 +90,10 @@ namespace MuMech
 
             CelestialBody body = _initialOrbit.referenceBody;
             bodyHasAtmosphere = body.atmosphere;
-            seaLevelAtmospheres = body.atmosphereMultiplier;
-            scaleHeight = 1000 * body.atmosphereScaleHeight;
+            //seaLevelAtmospheres = body.atmospherePressureSeaLevel;
+            //#warning seaLevelAtmospheres is not a pressure (?) so check the code
+            //scaleHeight = 1000 * body.atmosphereScaleHeight;
+            //scaleHeight = 1000;
             bodyRadius = body.Radius;
             gravParameter = body.gravParameter;
             this.dragMassExcludingUsedParachutes = _dragMassExcludingUsedParachutes;
@@ -414,7 +416,10 @@ namespace MuMech
 
             double realDragCoefficient = realDragMass / this.mass;
 
-            return -0.5 * FlightGlobals.DragMultiplier * realDragCoefficient * AirDensity(pos) * airVel.sqrMagnitude * airVel.normalized;
+            #warning FIX THAT BEFORE 1.0 !!
+
+            //return -0.5 * FlightGlobals.DragMultiplier * realDragCoefficient * AirDensity(pos) * airVel.sqrMagnitude * airVel.normalized;
+            return -0.5 * 1 * realDragCoefficient * AirDensity(pos) * airVel.sqrMagnitude * airVel.normalized;
         }
 
         void OpenParachutes(Vector3d pos)
@@ -447,10 +452,8 @@ namespace MuMech
 
         double Pressure(Vector3d pos)
         {
-            double ratio = Math.Exp(-(pos.magnitude - bodyRadius) / scaleHeight);
-            if (ratio < 1e-6) return 0; //this is not a fudge, this is faithfully simulating the game, which
-            //pretends the pressure is zero if it is less than 1e-6 times the sea level pressure
-            return seaLevelAtmospheres * ratio;
+            #warning may or may not work
+            return FlightGlobals.getStaticPressure(pos, mainBody);
         }
 
 
@@ -462,11 +465,11 @@ namespace MuMech
 
         double AirDensity(Vector3d pos)
         {
-            double ratio = Math.Exp(-(pos.magnitude - bodyRadius) / scaleHeight);
-            if (ratio < 1e-6) return 0; //this is not a fudge, this is faithfully simulating the game, which
-            //pretends the pressure is zero if it is less than 1e-6 times the sea level pressure
-            double pressure = seaLevelAtmospheres * ratio;
-            return FlightGlobals.getAtmDensity(pressure);
+            #warning I seriously doubt this is thread safe
+            double altitude = FlightGlobals.getAltitudeAtPos(pos, mainBody);
+            double pressure = FlightGlobals.getStaticPressure(altitude, mainBody);
+            double temp = FlightGlobals.getExternalTemperature(pos, mainBody);
+            return FlightGlobals.getAtmDensity(pressure, temp, mainBody);
         }
 
         public enum Outcome { LANDED, AEROBRAKED, TIMED_OUT, NO_REENTRY, ERROR }
