@@ -484,12 +484,13 @@ namespace MuMech
             //float dynamicPressurekPa = (float)(0.0005 * AirDensity(pos) * airVel.sqrMagnitude);
 
             //return vessel.Drag(airVel, (float)(0.0005 * AirDensity(pos) * airVel.sqrMagnitude), mach);
-            // Lift works with a velocity in SHIP coordinate and return a vector in ship coordinate
+            
             //Vector3 shipDrag = vessel.Drag(Vector3.back * (float)airVel.magnitude, dynamicPressurekPa, mach);
 
 
             // TODO : check if it is forward, back, up or down...
-            Vector3 shipDrag = vessel.Drag(Vector3.forward * (float)airVel.magnitude, dynamicPressurekPa, mach);
+            // Lift works with a velocity in SHIP coordinate and return a vector in ship coordinate
+            Vector3 shipDrag = vessel.Drag(Vector3.down * (float)airVel.magnitude, dynamicPressurekPa, mach);
 
             //if (once)
             //{
