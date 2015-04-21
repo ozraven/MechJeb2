@@ -155,6 +155,12 @@ namespace MuMech
         public double liftUp;
 
 
+        [ValueInfoItem("Mach", InfoItem.Category.Vessel, format = "F2")]
+        public double mach;
+
+        [ValueInfoItem("Speed of sound", InfoItem.Category.Vessel, format = ValueInfoItem.SI, units = "m/s")]
+        public double speedOfSound;
+
         [ValueInfoItem("Drag Coef", InfoItem.Category.Vessel, format = "F2")]
         public double dragCoef;
         
@@ -243,6 +249,7 @@ namespace MuMech
             //
             //flightIntegrator.
 
+            TestStuff(vessel);
 
             UpdateVelocityAndCoM(vessel);
 
@@ -259,6 +266,83 @@ namespace MuMech
             ToggleRCSThrust(vessel);
 
             UpdateMoIAndAngularMom(vessel);
+        }
+
+
+        public DragCubeList cube = new DragCubeList();
+
+
+        [ValueInfoItem("Drag Scalar", InfoItem.Category.Vessel, format = ValueInfoItem.SI, units = "m/s²")]
+        public double dragScalar;
+
+        [ValueInfoItem("Lift Scalar", InfoItem.Category.Vessel, format = ValueInfoItem.SI, units = "m/s²")]
+        public double liftScalar;
+
+
+        private void TestStuff(Vessel vessel)
+        {
+            //int partCount = vessel.parts.Count;
+            //for (int index = 0; index < partCount; ++index)
+            //{
+            //    if (!vessel.parts[index].DragCubes.None)
+            //        vessel.parts[index].DragCubes.SetDragWeights();
+            //}
+            //for (int index = 0; index < partCount; ++index)
+            //{
+            //    if (!vessel.parts[index].DragCubes.None)
+            //        vessel.parts[index].DragCubes.SetPartOcclusion();
+            //}
+
+            //for (int index = 0; index < partCount; ++index)
+            //{
+            //    Part part = vessel.parts[index];
+            //    if (!part.DragCubes.None)
+            //        part.DragCubes.SetDrag(part.dragVectorDirLocal, 0.1f);
+            //}
+
+            //cube = new DragCubeList();
+            //cube.ClearCubes();
+
+            //for (int index = 0; index < partCount; ++index)
+            //{
+            //    Part part = vessel.parts[index];
+            //    if (!part.DragCubes.None)
+            //    {
+            //        for (int face = 0; face < 6; face++)
+            //        {
+            //            //cube.WeightedArea[face] += part.DragCubes.WeightedArea[face];
+            //            cube.WeightedDrag[face] += part.DragCubes.WeightedDrag[face];
+            //            cube.AreaOccluded[face] += part.DragCubes.AreaOccluded[face];
+            //        }
+            //    }
+            //}
+            //
+            //cube.SetDrag(vessel.srf_velocity, (float)vessel.mach);
+            //
+            //double dragScale = cube.AreaDrag * PhysicsGlobals.DragCubeMultiplier;
+            
+
+           //SimulatedVessel simVessel = SimulatedVessel.New(vessel);
+
+            //MechJebCore.print("KPA " + vessel.dynamicPressurekPa.ToString("F9"));
+
+            //Vector3 localVel = vessel.GetTransform().InverseTransformDirection( vessel.srf_velocity );
+            Vector3 localVel = vessel.GetTransform().InverseTransformDirection( vessel.rigidbody.velocity + Krakensbane.GetFrameVelocity());
+
+            //MechJebCore.print(MuUtils.PrettyPrint(localVel));
+
+           //Vector3 simDrag = simVessel.Drag(localVel,
+           //    (float)(0.0005 * vessel.atmDensity * vessel.srf_velocity.sqrMagnitude),
+           //    (float)vessel.mach);
+           //
+           //
+           //Vector3 simLift = simVessel.Lift(vessel.rigidbody.velocity + Krakensbane.GetFrameVelocity(),
+           //    (float)(0.0005 * vessel.atmDensity * vessel.srf_velocity.sqrMagnitude),
+           //    (float)vessel.mach);
+           //
+           //dragScalar = simDrag.magnitude;
+           //
+           //liftScalar = simLift.magnitude;
         }
 
 
@@ -347,6 +431,8 @@ namespace MuMech
             normalPlusSurface = -Vector3d.Cross(radialPlusSurface, surfaceVelocity.normalized);
             normalPlus = -Vector3d.Cross(radialPlus, orbitalVelocity.normalized);
 
+            mach = vessel.mach;
+
             gravityForce = FlightGlobals.getGeeForceAtPosition(CoM);
             localg = gravityForce.magnitude;
 
@@ -374,7 +460,9 @@ namespace MuMech
             double temperature = FlightGlobals.getExternalTemperature(altitudeASL);
             atmosphericDensity = FlightGlobals.getAtmDensity(atmosphericPressure, temperature);
             atmosphericDensityGrams = atmosphericDensity * 1000;
-            dynamicPressure = 0.5 * vessel.atmDensity * surfaceVelocity.sqrMagnitude;
+            dynamicPressure = vessel.dynamicPressurekPa * 1000;
+
+            speedOfSound = vessel.speedOfSound;
 
             orbitApA.value = vessel.orbit.ApA;
             orbitPeA.value = vessel.orbit.PeA;
@@ -496,11 +584,17 @@ namespace MuMech
                 Part p = vessel.parts[i];
 
                 pureDragV += -p.dragVectorDir * p.dragScalar;
-
+                
+                if (!p.hasLiftModule)
+                {
+                    Vector3 bodyLift = p.transform.rotation * (p.bodyLiftScalar * p.DragCubes.LiftForce);
+                    bodyLift = Vector3.ProjectOnPlane(bodyLift, -p.dragVectorDir);
+                    pureLiftV += bodyLift;
+                }
 
                 //#warning while this works for real time it does not help for simulations. Need to get a coef even while in vacum
                 //if (p.dynamicPressurekPa > 0 && PhysicsGlobals.DragMultiplier > 0)
-                //    dragCoef += p.dragScalar / (p.dynamicPressurekPa * PhysicsGlobals.DragMultiplier);
+                //    dragCoef += p.simDragScalar / (p.dynamicPressurekPa * PhysicsGlobals.DragMultiplier);
 
                 #warning may need to check the drag model ?
                 dragCoef += p.DragCubes.AreaDrag * PhysicsGlobals.DragCubeMultiplier;

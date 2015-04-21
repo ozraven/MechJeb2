@@ -6,48 +6,65 @@ using UnityEngine;
 
 namespace MuMech
 {
-    class SimulatedPart
+    public class SimulatedPart
     {
 
-        private DragCubeList cubes = new DragCubeList();
+        private DragCubeList cubes;
         
         public double totalMass = 0;
         public bool shieldedFromAirstream;
         public bool noDrag;
         public bool hasLiftModule;
         private float bodyLiftMultiplier;
+        private float DragCubeMultiplier;
+        private float DragMultiplier;
+
+        //private PhysicsGlobals.LiftingSurfaceCurve liftCurves;
+        //private FloatCurve liftCurve;
+        //private FloatCurve liftMachCurve;
+
+        private ReentrySimulation.SimCurves simCurves;
 
         // Remove after test
-        private Part oPart;
+        //public Part oPart;
 
 
         private Quaternion vesselToPart;
-        
-        static public SimulatedPart New(Part p)
+
+        static public SimulatedPart New(Part p, ReentrySimulation.SimCurves simCurve)
         {
             SimulatedPart part = new SimulatedPart();
-            part.Set(p);
+            part.Set(p, simCurve);
             return part;
         }
 
-        private void Set(Part p)
+        private void Set(Part p, ReentrySimulation.SimCurves _simCurves)
         {
             totalMass = p.mass + p.GetResourceMass() + p.GetPhysicslessChildMass();
             shieldedFromAirstream = p.ShieldedFromAirstream;
 
             noDrag = p.rb == null && !PhysicsGlobals.ApplyDragToNonPhysicsParts;
             hasLiftModule = p.hasLiftModule;
-            bodyLiftMultiplier = p.bodyLiftMultiplier;
+            bodyLiftMultiplier = p.bodyLiftMultiplier * PhysicsGlobals.BodyLiftMultiplier;
+
+            simCurves = _simCurves;
+
+            cubes = new DragCubeList();
 
             CopyDragCubesList(p.DragCubes, cubes);
 
             // Rotation to convert the vessel space velocity to the part space velocity
             vesselToPart = Quaternion.LookRotation(p.vessel.GetTransform().InverseTransformDirection(p.transform.forward), p.vessel.GetTransform().InverseTransformDirection(p.transform.up)).Inverse();
+            
+
+            DragCubeMultiplier = PhysicsGlobals.DragCubeMultiplier;
+            DragMultiplier = PhysicsGlobals.DragMultiplier;
+
 
             if (p.dragModel != Part.DragModel.CUBE)
                 MechJebCore.print(p.name + " " + p.dragModel);
 
-            oPart = p;
+            //oPart = p;
 
         }
 
@@ -58,13 +75,38 @@ namespace MuMech
 
             Vector3 dragDir = -(vesselToPart * velocity).normalized;
 
-            cubes.SetDrag(dragDir, mach);
+            //cubes.SetDrag(dragDir, mach);
+            SetDrag(dragDir, mach);
 
-            //MechJebCore.print(velocity.normalized.magnitude.ToString("F3") + " " + cubes.AreaDrag.ToString("F3") + " " + dynamicPressurekPa.ToString("F7") + " " + PhysicsGlobals.DragCubeMultiplier.ToString("F3") + " " + PhysicsGlobals.DragMultiplier.ToString("F3"));
+            //return Vector3.zero;
+
+            //if (ReentrySimulation.once && false)
+            //{
+            //    string msg = oPart.name;
+            //    msg +="\n S" + velocity.magnitude.ToString("F3") + " " + cubes.AreaDrag.ToString("F3") + " " + dynamicPressurekPa.ToString("F7") + " " + mach.ToString("F3");
+            //    msg += "\n P" + oPart.vel.magnitude.ToString("F3") + " " + oPart.DragCubes.AreaDrag.ToString("F3") + " " + oPart.dynamicPressurekPa.ToString("F7") + " " + oPart.machNumber.ToString("F3");
+            //    msg += "\n dragDir " + MuUtils.PrettyPrint(dragDir) + " vs " + MuUtils.PrettyPrint(oPart.dragVectorDirLocal) + " " + Vector3.Angle(dragDir, oPart.dragVectorDirLocal).ToString("F3") + "°";
+            //
+            //    msg += "\n AreaOccluded ";
+            //    for (int i = 0; i < 6; i++)
+            //    {
+            //        msg += cubes.AreaOccluded[i].ToString("F3") + "/" + oPart.DragCubes.AreaOccluded[i].ToString("F3") + " ";
+            //    }
+            //    msg += "\n WeightedDrag ";
+            //    for (int i = 0; i < 6; i++)
+            //    {
+            //        msg += cubes.WeightedDrag[i].ToString("F3") + "/" + oPart.DragCubes.WeightedDrag[i].ToString("F3") + " ";
+            //    }
+            //    MechJebCore.print(msg);
+            //
+            //}
 
 #warning do some of this math once per frame
-            Vector3 drag = -velocity.normalized * cubes.AreaDrag * dynamicPressurekPa * PhysicsGlobals.DragCubeMultiplier * PhysicsGlobals.DragMultiplier;
+            //Vector3 drag = -velocity.normalized * cubes.AreaDrag * dynamicPressurekPa * DragCubeMultiplier * DragMultiplier;
+            Vector3 drag = -velocity.normalized * areaDrag * dynamicPressurekPa * DragCubeMultiplier * DragMultiplier;
 
+
+            //MechJebCore.print("Drag " + cubes.AreaDrag.ToString("F4") + " " + dynamicPressurekPa.ToString("F4") + " " + PhysicsGlobals.DragCubeMultiplier.ToString("F4") + " " + PhysicsGlobals.DragMultiplier.ToString("F4"));
 
             //bool delta = false;
             //string msg = oPart.name;
@@ -123,15 +165,44 @@ namespace MuMech
 
         public Vector3 Lift(Vector3 velocity, float dynamicPressurekPa, float mach)
         {
-            if (hasLiftModule)
+            if (shieldedFromAirstream || hasLiftModule)
                 return Vector3.zero;
 
 #warning obviously move out of here and evaluate once per mach value
-            var liftCurves = PhysicsGlobals.GetLiftingSurfaceCurve("BodyLift");
 
-            float lift = bodyLiftMultiplier * dynamicPressurekPa * PhysicsGlobals.BodyLiftMultiplier * liftCurves.liftMachCurve.Evaluate(mach);
-            Vector3 liftV = vesselToPart.Inverse() * cubes.LiftForce * lift;
-            return Vector3.ProjectOnPlane(liftV, velocity);
+
+            float bodyLiftScalar = bodyLiftMultiplier * dynamicPressurekPa * simCurves.LiftMachCurve.Evaluate(mach);
+            
+            // direction of the lift in a vessel centric reference
+            Vector3 liftV = vesselToPart.Inverse() * liftForce * bodyLiftScalar;
+
+            Vector3 liftVector = Vector3.ProjectOnPlane(liftV, velocity);
+
+
+            // cubes.LiftForce OK
+
+
+            //if (velocity.sqrMagnitude > 1 && oPart.DragCubes.LiftForce.sqrMagnitude > 0.001)
+            //{
+            //    string msg = oPart.name;
+            //
+            //    Vector3 bodyL = oPart.transform.rotation * (oPart.bodyLiftScalar * oPart.DragCubes.LiftForce);
+            //    Vector3 bodyLift = Vector3.ProjectOnPlane(bodyL, -oPart.dragVectorDir);
+            //
+            //    msg += "\n liftDir " + MuUtils.PrettyPrint(liftVector) + " vs " + MuUtils.PrettyPrint(bodyLift) + " " + Vector3.Angle(liftVector, bodyLift).ToString("F3") + "°";
+            //
+            //    Vector3 localBodyL = oPart.vessel.transform.InverseTransformDirection(bodyL);
+            //    msg += "\n liftV " + MuUtils.PrettyPrint(liftV) + " vs " + MuUtils.PrettyPrint(localBodyL) + " " + Vector3.Angle(liftV, localBodyL).ToString("F3") + "°";
+            //    
+            //    msg += "\n liftForce " + MuUtils.PrettyPrint(cubes.LiftForce) + " vs " + MuUtils.PrettyPrint(oPart.DragCubes.LiftForce) + " " + Vector3.Angle(cubes.LiftForce, oPart.DragCubes.LiftForce).ToString("F3") + "°";
+            //    msg += "\n Normals " + MuUtils.PrettyPrint(-velocity) + " vs " + MuUtils.PrettyPrint(-oPart.dragVectorDir) + " " + Vector3.Angle(-velocity, -oPart.dragVectorDir).ToString("F3") + "°";
+            //
+            //    //msg += "\n vals " + bodyLiftMultiplier.ToString("F5") + " " + dynamicPressurekPa.ToString("F5") + " " + liftCurves.liftMachCurve.Evaluate(mach).ToString("F5");
+            //
+            //    MechJebCore.print(msg);
+            //}
+
+            return liftVector;
         }
 
 
@@ -156,8 +227,11 @@ namespace MuMech
                 dest.WeightedArea[i] = source.WeightedArea[i];
                 dest.WeightedDrag[i] = source.WeightedDrag[i];
                 dest.AreaOccluded[i] = source.AreaOccluded[i];
-                dest.DragModifiers[i] = source.DragModifiers[i];
+                dest.WeightedDepth[i] = source.WeightedDepth[i];
             }
+
+            dest.SetDragWeights();
+
             // We are missing PostOcclusionArea but it seems to be used in Thermal only
         }
 
@@ -165,14 +239,62 @@ namespace MuMech
         {
             dest.Name = source.Name;
             dest.Weight = source.Weight;
+            dest.Center = source.Center;
+            dest.Size = source.Size;
             for (int i = 0; i < source.Drag.Length; i++)
             {
                 dest.Drag[i] = source.Drag[i];
                 dest.Area[i] = source.Area[i];
+                dest.Depth[i] = source.Depth[i];
                 dest.DragModifiers[i] = source.DragModifiers[i];
             }
         }
 
+        private float areaDrag;
+        private Vector3 liftForce;
+
+
+        // Unfortunately the DragCubeList SetDrag method is not thread safe
+        // so here is a thread safe version
+        private void SetDrag(Vector3 vector, float machNumber)
+        {
+            Vector3 dragVector = -vector;
+            areaDrag = 0f;
+            liftForce = Vector3.zero;
+            if (cubes.None)
+            {
+                return;
+            }
+            for (int i = 0; i < 6; i++)
+            {
+                Vector3 faceDirection = DragCubeList.GetFaceDirection((DragCube.DragFace)i);
+                float dragDot = Vector3.Dot(dragVector, faceDirection);
+                float dragValue = DragCurveValue((dragDot + 1f) * 0.5f, machNumber);
+                float faceAreaDrag = cubes.AreaOccluded[i] * dragValue;
+                areaDrag = areaDrag + faceAreaDrag * cubes.WeightedDrag[i];
+                if (dragDot > 0f)
+                {
+                    double lift = simCurves.LiftCurve.Evaluate(dragDot);
+                    if (!double.IsNaN(lift))
+                    {
+                        liftForce = liftForce + (-faceDirection * (dragDot * cubes.AreaOccluded[i] * cubes.WeightedDrag[i] * (float)lift));
+                    }
+                }
+            }
+        }
+
+        private float DragCurveValue(float dotNormalized, float mach)
+        {
+            float surfaceDrag = simCurves.DragCurveSurface.Evaluate(mach);
+            float multiplier = simCurves.DragCurveMultiplier.Evaluate(mach);
+            if (dotNormalized <= 0.5f)
+            {
+                float tailDrag = simCurves.DragCurveTail.Evaluate(mach);
+                return Mathf.Lerp(tailDrag, surfaceDrag, dotNormalized * 2f) * multiplier;
+            }
+            float tipDrag = simCurves.DragCurveTip.Evaluate(mach);
+            return Mathf.Lerp(surfaceDrag, tipDrag, (dotNormalized - 0.5f) * 2f) * multiplier;
+        }
 
     }
 }

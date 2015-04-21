@@ -460,14 +460,16 @@ namespace MuMech
                 // if the atmosphere is thick, deceleration (meaning freefall through the atmosphere)
                 // should end a safe height above the landing site in order to allow braking from terminal velocity
 #warning FIX THAT BEFORE 1.0 !!
-                double landingSiteDragLength = mainBody.DragLength(LandingAltitude, (vesselState.drag + ParachuteAddedDragMass()) / vesselState.mass);
+                double landingSiteDragLength = mainBody.DragLength(LandingAltitude, VesselAverageDrag() + ParachuteAddedDragCoef());
 
+                //MechJebCore.print("DecelerationEndAltitude Atmo " + (2 * landingSiteDragLength + LandingAltitude).ToString("F2"));
                 return 2 * landingSiteDragLength + LandingAltitude;
             }
             else
             {
                 //if the atmosphere is thin, the deceleration burn should end
                 //500 meters above the landing site to allow for a controlled final descent
+                //MechJebCore.print("DecelerationEndAltitude Vacum " + (500 + LandingAltitude).ToString("F2"));
                 return 500 + LandingAltitude;
             }
         }
@@ -483,17 +485,47 @@ namespace MuMech
             //The air density goes like exp(-h/(scale height)), so the drag length goes like exp(+h/(scale height)).
             //Some math shows that if (scale height) > e * (surface drag length) then 
             //there is an altitude at which (altitude) > (drag length at that altitude).
-            //double seaLevelDragLength = mainBody.DragLength(0, (vesselState.massDrag + ParachuteAddedDragMass()) / vesselState.mass);
-            #warning FIX THAT BEFORE 1.0 !!
+            double seaLevelDragLength = mainBody.DragLength(0, VesselAverageDrag() + ParachuteAddedDragCoef());
+            
+            // old code : 
             //return (1000 * mainBody.atmosphereScaleHeight > 2.71828 * seaLevelDragLength);
-            //return (1000 * 1 > 2.71828 * 1);
-            return false;
+
+            #warning use proper math solution
+            // this is not math but a random hack. Someone will have to fix it later
+            // 3 case to handle :
+            // - !mainBody.atmosphereUsePressureCurve
+            // - !mainBody.atmospherePressureCurveIsNormalized
+            // - default
+            //MechJebCore.print("UseAtmosphereToBrake " + (seaLevelDragLength < 3 * mainBody.atmosphereDepth));
+            return seaLevelDragLength < 3 * mainBody.atmosphereDepth ;
+        }
+
+        // Get an average drag for the whole vessel. Far from precise but fast.
+        public double VesselAverageDrag()
+        {
+            float dragCoef = 0;
+            for (int i = 0; i < vessel.parts.Count; i++)
+            {
+                Part part = vessel.parts[i];
+                if (part.DragCubes.None)
+                {
+                    continue;
+                }
+
+                float partDragCoef = 0;
+                for (int f = 0; f < 6; f++)
+                {
+                    partDragCoef = part.DragCubes.WeightedDrag[f];
+                }
+                dragCoef += partDragCoef / 6;
+            }
+            return dragCoef * PhysicsGlobals.DragCubeMultiplier;
         }
 
         // This is not the exact number, but it's good enough for our use
-        public double ParachuteAddedDragMass()
+        public double ParachuteAddedDragCoef()
         {
-            double addedDragMass = 0;
+            double addedDragCoef = 0;
             if (vesselState.mainBody.atmosphere && deployChutes)
             {
                 for (int i = 0; i < vesselState.parachutes.Count; i++)
@@ -501,20 +533,26 @@ namespace MuMech
                     ModuleParachute p = vesselState.parachutes[i];
                     if (p.part.inverseStage >= limitChutesStage)
                     {
-                        switch (p.deploymentState)
+                        //addedDragMass += p.part.DragCubes.Cubes.Where(c => c.Name == "DEPLOYED").m
+
+                        float maxCoef = 0;
+                        for (int c = 0; c < p.part.DragCubes.Cubes.Count; c++)
                         {
-                            case ModuleParachute.deploymentStates.STOWED:
-                            case ModuleParachute.deploymentStates.ACTIVE:
-                                addedDragMass += p.part.mass * p.fullyDeployedDrag - p.part.mass * p.stowedDrag;
-                                break;
-                            case ModuleParachute.deploymentStates.SEMIDEPLOYED:
-                                addedDragMass += p.part.mass * p.fullyDeployedDrag - p.part.mass * p.semiDeployedDrag;
-                                break;
+                            DragCube dragCube = p.part.DragCubes.Cubes[c];
+                            if (dragCube.Name != "DEPLOYED")
+                                continue;
+
+                            for (int f = 0; f < 6; f++)
+                            {
+                                // we only want the additional coef from going fully deployed
+                                maxCoef = Mathf.Max(maxCoef, p.part.DragCubes.WeightedDrag[f] - dragCube.Weight * dragCube.Drag[f]);
+                            }
                         }
+                        addedDragCoef += maxCoef;
                     }
                 }
             }
-            return addedDragMass;
+            return addedDragCoef * PhysicsGlobals.DragCubeMultiplier;
         }
 
         bool UseLowDeorbitStrategy()
