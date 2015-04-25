@@ -33,7 +33,7 @@ namespace KerbalEngineer.VesselSimulator
     {
         #region Constants
 
-        public const double RESOURCE_MIN = 0.0001;
+        public const double RESOURCE_MIN = 0;
 
         #endregion
 
@@ -89,7 +89,7 @@ namespace KerbalEngineer.VesselSimulator
         public static Stage[] VacStages { get; private set; }
         public static Stage[] AtmStages { get; private set; }
 
-        public static double Velocity { get; set; }
+        public static double Mach { get; set; }
 
         public static String failMessage { get; private set; }
 
@@ -385,10 +385,10 @@ namespace KerbalEngineer.VesselSimulator
                 var parts = HighLogic.LoadedSceneIsEditor ? EditorLogic.fetch.ship.parts : FlightGlobals.ActiveVessel.Parts;
 
                 Profiler.BeginSample("SimManager.StartSimulation().vacSim");
-                bool vacSim = simulations[0].PrepareSimulation(parts, Gravity, 0d, Velocity, dumpTree, vectoredThrust);
+                bool vacSim = simulations[0].PrepareSimulation(parts, Gravity, 0d, Mach, dumpTree, vectoredThrust);
                 Profiler.EndSample();
                 //Profiler.BeginSample("SimManager.StartSimulation().atmSim");
-                bool atmSim = simulations[1].PrepareSimulation(parts, Gravity, Atmosphere, Velocity, dumpTree, vectoredThrust);
+                bool atmSim = simulations[1].PrepareSimulation(parts, Gravity, Atmosphere, Mach, dumpTree, vectoredThrust);
                 //Profiler.EndSample();
 
                 // This call doesn't ever fail at the moment but we'll check and return a sensible error for display

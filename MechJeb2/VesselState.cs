@@ -597,7 +597,8 @@ namespace MuMech
                 //    dragCoef += p.simDragScalar / (p.dynamicPressurekPa * PhysicsGlobals.DragMultiplier);
 
                 #warning may need to check the drag model ?
-                dragCoef += p.DragCubes.AreaDrag * PhysicsGlobals.DragCubeMultiplier;
+                //dragCoef += p.DragCubes.AreaDrag * PhysicsGlobals.DragCubeMultiplier;
+                dragCoef += p.DragCubes.DragCoeff;
 
                 for (int index = 0; index < vesselStatePartExtensions.Count; index++)
                 {
@@ -616,7 +617,7 @@ namespace MuMech
                     if (pm is ModuleReactionWheel)
                     {
                         ModuleReactionWheel rw = (ModuleReactionWheel)pm;
-                        if (rw.wheelState == ModuleReactionWheel.WheelState.Active && !rw.stateString.Contains("Not enough"))
+                        if (rw.wheelState == ModuleReactionWheel.WheelState.Active && rw.operational)
                         {
                             torqueAvailable += new Vector3d(rw.PitchTorque, rw.RollTorque, rw.YawTorque);
                         }
@@ -642,6 +643,11 @@ namespace MuMech
                     }
                     else if (pm is ModuleControlSurface)
                     {
+
+
+#warning TEST THIS : instead of using Vector6 use 2 Vector3. One for control at (1,1,1) and the other for (-1,-1,-1). Add them all up and use that as the real available torque
+
+
                         // TODO : Tweakable for ignorePitch / ignoreYaw  / ignoreRoll 
                         ModuleControlSurface cs = (pm as ModuleControlSurface);
 
@@ -1059,20 +1065,15 @@ namespace MuMech
                 {
                     Part p = e.part;
 
-                    double usableFraction = 1;
-                    if (e.useVelocityCurve)
-                    {
-                        usableFraction *= e.velocityCurve.Evaluate((float)(e.part.vessel.orbit.GetVel() - e.part.vessel.mainBody.getRFrmVel(CoM)).magnitude);
-                    }
-
-                    float maxThrust = e.maxThrust / (float)e.thrustTransforms.Count;
-                    float minThrust = e.minThrust / (float)e.thrustTransforms.Count;
+                    float maxThrust = e.minFuelFlow * e.flowMultiplier * e.realIsp * e.g / e.thrustTransforms.Count;
+                    float minThrust = e.maxFuelFlow * e.flowMultiplier * e.realIsp * e.g / e.thrustTransforms.Count;
 
                     float thrustLimiter = e.thrustPercentage / 100f;
                     double eMaxThrust = minThrust + (maxThrust - minThrust) * thrustLimiter;
                     double eMinThrust = e.throttleLocked ? eMaxThrust : minThrust;
                     // currentThrottle include the thrustLimiter
-                    double eCurrentThrust = usableFraction * (eMaxThrust * e.currentThrottle / thrustLimiter + eMinThrust * (1 - e.currentThrottle / thrustLimiter));
+                    //double eCurrentThrust = usableFraction * (eMaxThrust * e.currentThrottle / thrustLimiter + eMinThrust * (1 - e.currentThrottle / thrustLimiter));
+                    double eCurrentThrust = e.resultingThrust / e.thrustTransforms.Count;
 
                     for (int i = 0; i < e.thrustTransforms.Count; i++)
                     {

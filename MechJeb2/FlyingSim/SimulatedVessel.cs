@@ -44,22 +44,25 @@ namespace MuMech
             }
         }
 
-        public Vector3 Drag(Vector3 velocity, float dynamicPressurekPa, float mach)
+        public Vector3 Drag(Vector3 velocity, Quaternion attitude, float dynamicPressurekPa, float mach)
         {
             Vector3 drag = Vector3.zero;
+
+            Vector3 vesselLocalVel = attitude * Vector3.up * velocity.magnitude;
 
             for (int i = 0; i < count; i++)
             {
                 SimulatedPart part = parts[i];
                 //MechJebCore.print(i);
-                drag += part.Drag(velocity, dynamicPressurekPa, mach);
+                drag += part.Drag(vesselLocalVel, dynamicPressurekPa, mach);
             }
-            return drag;
+
+            return -velocity.normalized * drag.magnitude;
         }
 
 
 
-        public Vector3 Lift(Vector3 velocity, float dynamicPressurekPa, float mach)
+        public Vector3 Lift(Vector3 velocity, Quaternion attitude, float dynamicPressurekPa, float mach)
         {
             Vector3 lift = Vector3.zero;
 

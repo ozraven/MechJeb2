@@ -566,6 +566,7 @@ namespace MuMech
             }
         }
 
+#warning from here remove all the EngineWrapper stuff and move the useful stuff to VesselState.EngineInfo
 
         static void MaxThrust(double[] x, ref double func, double[] grad, object obj)
         {
@@ -576,7 +577,7 @@ namespace MuMech
             for (int i = 0, j = 0; j < el.Count; j++)
             {
                 EngineWrapper e = el[j];
-                if (!e.throttleLocked)
+                if (!e.engine.throttleLocked)
                 {
                     func -= el[j].maxVariableForce.y * x[i];
                     grad[i] = -el[j].maxVariableForce.y;
@@ -594,10 +595,11 @@ namespace MuMech
                 for (int j = 0; j < p.Modules.Count; j++)
                 {
                     PartModule pm = p.Modules[j];
-                    if (pm is ModuleEngines || pm is ModuleEnginesFX)
+                    if (pm is ModuleEngines)
                     {
-                        EngineWrapper engine = new EngineWrapper(pm);
-                        if (engine.ignited && !engine.flameout && engine.enabled)
+                        ModuleEngines e = (ModuleEngines)pm;
+                        EngineWrapper engine = new EngineWrapper(e);
+                        if (e.EngineIgnited && !e.flameout && e.enabled)
                         {
                             engine.UpdateForceAndTorque(vesselState.CoM);
                             engines.Add(engine);
@@ -606,7 +608,7 @@ namespace MuMech
                 }
             }
 
-            int n = engines.Count(eng => !eng.throttleLocked);
+            int n = engines.Count(eng => !eng.engine.throttleLocked);
             if (n < 3)
             {
                 for (int i = 0; i < engines.Count; i++)
@@ -635,7 +637,7 @@ namespace MuMech
                 C[0,n] -= e.constantTorque.x;
                 C[1,n] -= e.constantTorque.z;
 
-                if (!e.throttleLocked)
+                if (!e.engine.throttleLocked)
                 {
                     C[0,i] = e.maxVariableTorque.x;
                     //C[1,j] = e.maxVariableTorque.y;
@@ -695,7 +697,7 @@ namespace MuMech
 
             for (int i = 0, j = 0; j < engines.Count; j++)
             {
-                if (!engines[j].throttleLocked)
+                if (!engines[j].engine.throttleLocked)
                 {
                     engines[j].thrustRatio = (float)x[i];
                     i++;
@@ -713,9 +715,10 @@ namespace MuMech
                 for (int j = 0; j < p.Modules.Count; j++)
                 {
                     PartModule pm = p.Modules[j];
-                    if (pm is ModuleEngines || pm is ModuleEnginesFX)
+                    if (pm is ModuleEngines)
                     {
-                        EngineWrapper engine = new EngineWrapper(pm);
+                        ModuleEngines e = (ModuleEngines)pm;
+                        EngineWrapper engine = new EngineWrapper(e);
                         engine.thrustRatio = 1;
                     }
                 }

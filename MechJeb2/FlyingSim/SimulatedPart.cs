@@ -81,10 +81,10 @@ namespace MuMech
             if (shieldedFromAirstream || noDrag)
                 return Vector3.zero;
 
-            Vector3 dragDirLocal = -(vesselToPart * vesselVelocity).normalized;
+            Vector3 dragVectorDirLocal = -(vesselToPart * vesselVelocity).normalized;
 
             // Use our thread safe version of SetDrag
-            SetDrag(-dragDirLocal, mach);
+            SetDrag(-dragVectorDirLocal, mach);
 
 #warning do some of this math once per frame
             Vector3 drag = -vesselVelocity.normalized * areaDrag * dynamicPressurekPa * PhysicsGlobals.DragCubeMultiplier * PhysicsGlobals.DragMultiplier;
@@ -154,7 +154,7 @@ namespace MuMech
             // direction of the lift in a vessel centric reference
             Vector3 liftV = vesselToPart.Inverse() * liftForce * bodyLiftScalar;
 
-            Vector3 liftVector = Vector3.ProjectOnPlane(liftV, velocity);
+            Vector3 liftVector = Vector3.ProjectOnPlane(liftV, -velocity);
 
 
             // cubes.LiftForce OK

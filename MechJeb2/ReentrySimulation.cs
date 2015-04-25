@@ -42,6 +42,8 @@ namespace MuMech
         double maxThrustAccel;
         double probableLandingSiteASL; // This is the height of the ground at the point we think we will land. It is infact calculated by getting the height of the previous prediction. It is used to decide when the parachutes will be deployed.
         double probableLandingSiteRadius; // This is the height of the ground from the centre of the body at the point we think we will land. It is infact calculated by getting the height of the previous prediction. It is used to decide when the parachutes will be deployed, and when we have landed.
+        Quaternion attitude;
+
 
         bool orbitReenters;
 
@@ -91,6 +93,9 @@ namespace MuMech
             input_probableLandingSiteASL = _probableLandingSiteASL;
             input_multiplierHasError = _multiplierHasError;
             input_dt = _dt;
+
+            attitude = Quaternion.Euler(180,0,0);
+
 
             min_dt = _min_dt;
             max_dt = _dt;
@@ -325,7 +330,7 @@ namespace MuMech
 
                 // Perform the RK4 calculation
                 {
-                    Vector3d dv1 = dt * TotalAccel(x, v);
+                    Vector3d dv1 = dt * TotalAccel(x, v, true);
                     Vector3d dx1 = dt * v;
 
                     Vector3d dv2 = dt * TotalAccel(x + 0.5 * dx1, v + 0.5 * dv1);
@@ -437,6 +442,10 @@ namespace MuMech
                 result.prediction.dynamicPressurekPa = dynamicPressurekPa;
             }
 
+
+            Quaternion worldtoShip = Quaternion.FromToRotation(vel, Vector3.up);
+
+
             Vector3d dragAccel = (1d / vessel.totalMass) * DragAccel(pos, vel, dynamicPressurekPa, mach);
 
             if (record)
@@ -490,7 +499,8 @@ namespace MuMech
 
             // TODO : check if it is forward, back, up or down...
             // Lift works with a velocity in SHIP coordinate and return a vector in ship coordinate
-            Vector3 shipDrag = vessel.Drag(Vector3.down * (float)airVel.magnitude, dynamicPressurekPa, mach);
+            //Vector3 shipDrag = vessel.Drag(Vector3.down * (float)airVel.magnitude, dynamicPressurekPa, mach);
+            Vector3 shipDrag = vessel.Drag(airVel, attitude, dynamicPressurekPa, mach);
 
             //if (once)
             //{
@@ -542,7 +552,7 @@ namespace MuMech
             //float mach = Mathf.Min((float)(airVel.magnitude / speedOfSound), 50f);
 
             // Lift works with a velocity in WORLD coordinate <- well it should but the reported value is wrong so I messed up somewhere
-            return vessel.Lift(airVel, dynamicPressurekPa, mach);
+            //return vessel.Lift(airVel, dynamicPressurekPa, mach);
         }
 
         void OpenParachutes(Vector3d pos)
