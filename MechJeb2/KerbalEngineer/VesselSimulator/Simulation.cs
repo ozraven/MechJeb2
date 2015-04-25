@@ -129,7 +129,7 @@ namespace KerbalEngineer.VesselSimulator
         // need during the simulation.  All required data is copied from the core game data structures 
         // so that the simulation itself can be run in a background thread without having issues with 
         // the core game changing the data while the simulation is running.
-        public bool PrepareSimulation(List<Part> parts, double theGravity, double theAtmosphere = 0, double theMach = 0, bool dumpTree = false, bool vectoredThrust = false)
+        public bool PrepareSimulation(List<Part> parts, double theGravity, double theAtmosphere = 0, double theMach = 0, bool dumpTree = false, bool vectoredThrust = false, bool fullThrust = false)
         {
             LogMsg log = null;
             if (SimManager.logOutput)
@@ -192,7 +192,7 @@ namespace KerbalEngineer.VesselSimulator
                 }
                 if (partSim.isEngine)
                 {
-                    partSim.CreateEngineSims(this.allEngines, this.atmosphere, this.mach, vectoredThrust, log);
+                    partSim.CreateEngineSims(this.allEngines, this.atmosphere, this.mach, vectoredThrust, fullThrust, log);
                 }
 
                 partId++;

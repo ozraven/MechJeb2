@@ -33,7 +33,7 @@ namespace KerbalEngineer.VesselSimulator
     {
         #region Constants
 
-        public const double RESOURCE_MIN = 0;
+        public const double RESOURCE_MIN = 0.000;
 
         #endregion
 
@@ -272,9 +272,9 @@ namespace KerbalEngineer.VesselSimulator
                 bRequested = false;
                 timer.Reset();
             }
-            Profiler.BeginSample("SimManager.StartSimulation()");
+            //Profiler.BeginSample("SimManager.StartSimulation()");
             StartSimulation();
-            Profiler.EndSample();
+            //Profiler.EndSample();
         }
 
         private static void ClearResults()
@@ -384,17 +384,18 @@ namespace KerbalEngineer.VesselSimulator
 
                 var parts = HighLogic.LoadedSceneIsEditor ? EditorLogic.fetch.ship.parts : FlightGlobals.ActiveVessel.Parts;
 
-                Profiler.BeginSample("SimManager.StartSimulation().vacSim");
-                bool vacSim = simulations[0].PrepareSimulation(parts, Gravity, 0d, Mach, dumpTree, vectoredThrust);
-                Profiler.EndSample();
+                //Profiler.BeginSample("SimManager.StartSimulation().vacSim");
+                bool vacSim = simulations[0].PrepareSimulation(parts, Gravity, 0d, Mach, dumpTree, vectoredThrust, true);
+                //Profiler.EndSample();
                 //Profiler.BeginSample("SimManager.StartSimulation().atmSim");
-                bool atmSim = simulations[1].PrepareSimulation(parts, Gravity, Atmosphere, Mach, dumpTree, vectoredThrust);
+                bool atmSim = simulations[1].PrepareSimulation(parts, Gravity, 1d, Mach, dumpTree, vectoredThrust, true);
                 //Profiler.EndSample();
 
                 // This call doesn't ever fail at the moment but we'll check and return a sensible error for display
                 if (vacSim && atmSim)
                 {
-                    ThreadPool.QueueUserWorkItem(RunSimulation, simulations);
+                    //ThreadPool.QueueUserWorkItem(RunSimulation, simulations);
+                    RunSimulation(simulations);
                 }
                 else
                 {

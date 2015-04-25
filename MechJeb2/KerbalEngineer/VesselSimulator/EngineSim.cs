@@ -81,6 +81,7 @@ namespace KerbalEngineer.VesselSimulator
                          FloatCurve atmCurve,
                          FloatCurve velCurve,
                          float currentThrottle,
+                         float IspG,
                          bool throttleLocked,
                          List<Propellant> propellants,
                          bool active,
@@ -153,6 +154,9 @@ namespace KerbalEngineer.VesselSimulator
                 {
                     multiplier *= velCurve.Evaluate((float)machNumber);
                 }
+
+                MonoBehaviour.print("multiplier " + multiplier.ToString("F3")); 
+
 
                 if (throttleLocked)
                 {
@@ -230,7 +234,7 @@ namespace KerbalEngineer.VesselSimulator
                 buffer.AppendFormat("flowRate = {0:g6}\n", flowRate);
             }
 
-            engineSim.thrust = flowRate * (engineSim.isp * 9.82);
+            engineSim.thrust = flowRate * (engineSim.isp * IspG);
             // TODO : look into the diff between the 2 in the old code (jet real thrust vs ideal thrust ?)
             engineSim.actualThrust = engineSim.thrust;
 

@@ -198,7 +198,7 @@ namespace KerbalEngineer.VesselSimulator
             get { return this.resourceDrains; }
         }
 
-        public void CreateEngineSims(List<EngineSim> allEngines, double atmosphere, double mach, bool vectoredThrust, LogMsg log)
+        public void CreateEngineSims(List<EngineSim> allEngines, double atmosphere, double mach, bool vectoredThrust, bool fullThrust, LogMsg log)
         {
             bool correctThrust = SimManager.DoesEngineUseCorrectedThrust(this.part);
             if (log != null)
@@ -244,7 +244,8 @@ namespace KerbalEngineer.VesselSimulator
                             engine.useAtmCurve ? engine.atmCurve : null,
                             engine.useVelCurve ? engine.velCurve : null,
                             engine.currentThrottle,
-                            engine.throttleLocked,
+                            engine.g,
+                            engine.throttleLocked || fullThrust,
                             engine.propellants,
                             engine.isOperational,
                             correctThrust,
@@ -265,7 +266,7 @@ namespace KerbalEngineer.VesselSimulator
                         {
                             log.buf.AppendLine("Module: " + engine.moduleName);
                         }
-
+                        
                         Vector3 thrustvec = this.CalculateThrustVector(vectoredThrust ? engine.thrustTransforms : null, log);
 
                         EngineSim engineSim = EngineSim.New(
@@ -280,7 +281,8 @@ namespace KerbalEngineer.VesselSimulator
                             engine.useAtmCurve ? engine.atmCurve : null,
                             engine.useVelCurve ? engine.velCurve : null,
                             engine.currentThrottle,
-                            engine.throttleLocked,
+                            engine.g,
+                            engine.throttleLocked || fullThrust,
                             engine.propellants,
                             engine.isOperational,
                             correctThrust,
